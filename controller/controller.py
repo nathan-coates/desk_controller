@@ -5,7 +5,7 @@ from kvm import KVMApp
 from lights import LightsApp
 from menu import MenuApp
 from player import PlayerApp
-from shared import AppJob, DeskControllerApp, HitBox, Result, Results, TouchCoordinates
+from shared import AppJob, DeskControllerApp, HitBox, Result, ResultId, TouchCoordinates
 
 
 @dataclass
@@ -99,10 +99,10 @@ class Controller:
     def current_display(self) -> str:
         return self.current_app.app.display()
 
-    def pending_update(self) -> str:
+    def pending_update(self) -> Optional[Result]:
         return self.current_app.app.pending_update()
 
-    def touch_event(self, x: int, y: int, s: int) -> Result:
+    def touch_event(self, x: int, y: int, s: int) -> Optional[Result]:
         coordinates = TouchCoordinates(x, y, s)
 
         if coordinates.check_hit(self.top_hb):
@@ -113,29 +113,40 @@ class Controller:
                     print("menu hit")
                     self.back_app = self.current_app
                     self.current_app = self.apps[0]
-                    return Result(Results.SUCCESS.value)
+
+                    return Result(
+                        result=ResultId(0), display_path=self.current_app.app.display()
+                    )
             else:
                 if coordinates.check_hit(self.left_hb):
                     print("back hit")
                     if self.back_app is not None:
                         self.current_app = self.back_app
-                    return Result(Results.SUCCESS.value)
+
+                    return Result(
+                        result=ResultId(0), display_path=self.current_app.app.display()
+                    )
 
             if self.current_app.left is not None:
                 if coordinates.check_hit(self.left_hb):
                     print("left option hit")
                     self.current_app = self.current_app.left
-                    return Result(Results.SUCCESS.value)
+
+                    return Result(
+                        result=ResultId(0), display_path=self.current_app.app.display()
+                    )
 
             if self.current_app.right is not None:
                 if coordinates.check_hit(self.right_hb):
                     print("right option hit")
                     self.current_app = self.current_app.right
-                    return Result(Results.SUCCESS.value)
 
-            return Result(Results.NORESPONSE.value)
+                    return Result(
+                        result=ResultId(0), display_path=self.current_app.app.display()
+                    )
 
-        return self.current_app.app.touch_event(coordinates)
+        self.current_app.app.touch_event(coordinates)
+        return None
 
     def jobs(self) -> list[AppJob]:
         jobs: list[AppJob] = []

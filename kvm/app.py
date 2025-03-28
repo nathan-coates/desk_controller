@@ -1,4 +1,6 @@
 from enum import Enum
+from queue import Queue
+from threading import Thread
 from typing import Callable, Optional
 
 from shared import (
@@ -8,6 +10,7 @@ from shared import (
     DeskControllerAppButtons,
     HitBox,
     Result,
+    ResultId,
     Results,
     TouchCoordinates,
 )
@@ -26,13 +29,19 @@ class KVMApp(DeskControllerApp):
     current_id: ComputerId
     command_mapping: dict[ComputerId, str]
     client: Client
+    job_queue: Queue
+    worker_thread: Thread
 
     def __init__(self):
         self.client = Client()
 
+        self.job_queue = Queue()
+        self.worker_thread = Thread(target=self.__worker, args=(self.job_queue,))
+        self.worker_thread.start()
+
         self.current_id = ComputerId.macMini
 
-        self.pending_update_display = ""
+        self.pending_update_display = None
 
         self.command_mapping = {
             ComputerId.macMini: "COMMAND_1",
@@ -82,27 +91,21 @@ class KVMApp(DeskControllerApp):
                 self.current_id = computer_id
                 self.__send_command(computer_id)
 
-                return Result(Results.SUCCESS.value)
+                return Result(
+                    result=ResultId(Results.SUCCESS.value), display_path=self.display()
+                )
 
-            return Result(Results.NORESPONSE.value)
+            return Result(result=ResultId(Results.NORESPONSE.value), display_path="")
 
         return action
 
     def __send_command(self, computer_id: ComputerId) -> None:
         print("sending command", self.command_mapping[computer_id])
 
-    def touch_event(self, coordinates: TouchCoordinates) -> Result:
+    def touch_event(self, coordinates: TouchCoordinates) -> None:
         for app_button in self.app_buttons:
             if coordinates.check_hit(app_button.hit_box):
-                try:
-                    result = app_button.action()
-                except Exception:
-                    self.pending_update_display = ImagesMapping.error
-                    return Result(Results.NORESPONSE.value)
-
-                return result
-
-        return Result(Results.NORESPONSE.value)
+                self.job_queue.put(app_button.action)
 
     def display(self) -> str:
         match self.current_id:
@@ -118,11 +121,34 @@ class KVMApp(DeskControllerApp):
     def error(self) -> str:
         return ImagesMapping.error
 
-    def pending_update(self) -> str:
+    def pending_update(self) -> Optional[Result]:
         to_return = self.pending_update_display
-        self.pending_update_display = ""
+        self.pending_update_display = None
 
         return to_return
 
     def periodic_job(self) -> Optional[AppJob]:
         return None
+
+    def clean_up(self) -> None:
+        self.job_queue.put(None)
+        self.worker_thread.join()
+
+        print("KVM cleaned up")
+
+    def __worker(self, job_queue: Queue) -> None:
+        while True:
+            job: Optional[Callable[[], Result]] = job_queue.get(block=True)
+            if job is None:
+                print("KVM worker closing")
+                break
+
+            try:
+                self.pending_update_display = job()
+            except Exception as e:
+                print("Exception from KVM occured", str(e))
+                self.pending_update_display = Result(
+                    result=ResultId(Results.NORESPONSE.value), display_path=self.error()
+                )
+
+            job_queue.task_done()

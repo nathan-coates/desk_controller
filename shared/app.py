@@ -5,7 +5,13 @@ from typing import Callable, NewType, Optional
 
 from .coordinates import HitBox, TouchCoordinates
 
-Result = NewType("Result", int)
+ResultId = NewType("ResultId", int)
+
+
+@dataclass
+class Result:
+    result: ResultId
+    display_path: str
 
 
 class Results(Enum):
@@ -35,10 +41,10 @@ class AppJob:
 
 class DeskControllerApp(ABC):
     app_buttons: DeskControllerAppButtons
-    pending_update_display: str
+    pending_update_display: Optional[Result]
 
     @abstractmethod
-    def touch_event(self, coordinates: TouchCoordinates) -> Result:
+    def touch_event(self, coordinates: TouchCoordinates) -> None:
         pass
 
     @abstractmethod
@@ -50,9 +56,13 @@ class DeskControllerApp(ABC):
         pass
 
     @abstractmethod
-    def pending_update(self) -> str:
+    def pending_update(self) -> Optional[Result]:
         pass
 
     @abstractmethod
     def periodic_job(self) -> Optional[AppJob]:
+        pass
+
+    @abstractmethod
+    def clean_up(self) -> None:
         pass
