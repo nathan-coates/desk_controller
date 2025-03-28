@@ -8,20 +8,25 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "gpiozero>=2.0.1",
+    "gpiozero>=2.0.1; platform_system == 'Linux'",
     "pillow>=11.1.0",
     "pyserial>=3.5",
     "python-dotenv>=1.0.1",
     "python-hue-v2>=2.2.1",
-    "rpi-lgpio>=0.6",
+    "rpi-lgpio>=0.6; platform_system == 'Linux'",
     "schedule>=1.2.2",
-    "smbus>=1.1.post2",
-    "spidev>=3.6",
+    "smbus>=1.1.post2; platform_system == 'Linux'",
+    "spidev>=3.6; platform_system == 'Linux'",
     "spotipy>=2.25.1",
 ]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.15.0",
     "pygame>=2.6.1",
     "ruff>=0.11.2",
 ]
+
+[tool.mypy]
+ignore_missing_imports = true
+exclude = "pibeam"

@@ -1,5 +1,6 @@
 from enum import Enum
-from threading import Timer
+from queue import Queue
+from threading import Thread, Timer
 from typing import Callable, Optional
 
 from shared import (
@@ -9,6 +10,7 @@ from shared import (
     DeskControllerAppButtons,
     HitBox,
     Result,
+    ResultId,
     Results,
     TouchCoordinates,
 )
@@ -28,11 +30,17 @@ class PlayerApp(DeskControllerApp):
     current_id: PlayerId
     direction_button: Optional[PlayerId]
     spotify_client: Client
+    job_queue: Queue
+    worker_thread: Thread
 
     def __init__(self):
         self.current_id = PlayerId.paused
 
-        self.pending_update_display = ""
+        self.job_queue = Queue()
+        self.worker_thread = Thread(target=self.__worker, args=(self.job_queue,))
+        self.worker_thread.start()
+
+        self.pending_update_display = None
 
         self.spotify_client = Client()
         self.current_id = (
@@ -89,10 +97,14 @@ class PlayerApp(DeskControllerApp):
                         self.current_id = PlayerId.playing
 
                 self.__client_action(self.current_id)
-                return Result(Results.SUCCESS.value)
+                return Result(
+                    result=ResultId(Results.SUCCESS.value), display_path=self.display()
+                )
 
             if self.current_id is not PlayerId.playing:
-                return Result(Results.NORESPONSE.value)
+                return Result(
+                    result=ResultId(Results.NORESPONSE.value), display_path=""
+                )
 
             match player_id:
                 case PlayerId.next:
@@ -102,7 +114,9 @@ class PlayerApp(DeskControllerApp):
 
             self.current_id = player_id
             self.__client_action(player_id)
-            return Result(Results.SUCCESS.value)
+            return Result(
+                result=ResultId(Results.SUCCESS.value), display_path=self.display()
+            )
 
         return action
 
@@ -121,22 +135,17 @@ class PlayerApp(DeskControllerApp):
             case _:
                 return
 
-    def touch_event(self, coordinates: TouchCoordinates) -> Result:
+    def touch_event(self, coordinates: TouchCoordinates) -> None:
         for app_button in self.app_buttons:
             if coordinates.check_hit(app_button.hit_box):
-                try:
-                    result = app_button.action()
-                except Exception:
-                    self.pending_update_display = ImagesMapping.error
-                    return Result(Results.NORESPONSE.value)
-
-                return result
-
-        return Result(Results.NORESPONSE.value)
+                self.job_queue.put(app_button.action)
 
     def __return_to_base(self):
         self.current_id = PlayerId.playing
-        self.pending_update_display = ImagesMapping.player_playing
+        self.pending_update_display = Result(
+            result=ResultId(Results.SUCCESS.value),
+            display_path=ImagesMapping.player_playing,
+        )
 
     def display(self) -> str:
         match self.current_id:
@@ -156,9 +165,9 @@ class PlayerApp(DeskControllerApp):
     def error(self) -> str:
         return ImagesMapping.error
 
-    def pending_update(self) -> str:
+    def pending_update(self) -> Optional[Result]:
         to_return = self.pending_update_display
-        self.pending_update_display = ""
+        self.pending_update_display = None
 
         return to_return
 
@@ -182,3 +191,25 @@ class PlayerApp(DeskControllerApp):
             job=job,
             interval_seconds=60,
         )
+
+    def clean_up(self) -> None:
+        self.job_queue.put(None)
+        self.worker_thread.join()
+
+        print("Spotify cleaned up")
+
+    def __worker(self, job_queue: Queue) -> None:
+        while True:
+            job: Optional[Callable[[], Result]] = job_queue.get(block=True)
+            if job is None:
+                print("Spotify worker closing")
+                break
+
+            try:
+                self.pending_update_display = job()
+            except:
+                self.pending_update_display = Result(
+                    result=ResultId(Results.NORESPONSE.value), display_path=self.error()
+                )
+
+            job_queue.task_done()

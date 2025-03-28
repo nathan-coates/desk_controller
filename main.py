@@ -7,6 +7,7 @@ from PIL import Image
 
 from controller import Controller
 from shared import Results, Runner
+from shared.app import Result
 from waveshare import EPD, GT1151, GtDevelopment
 
 
@@ -62,8 +63,12 @@ class MainApp:
                 self.gt_dev.Touch = 0
         print("thread:exit")
 
+    def __controller_cleanup(self):
+        for app in self.controller.apps:
+            app.app.clean_up()
+
     def __keyboard_interrupt(self):
-        print("ctrl+c")
+        self.__controller_cleanup()
         self.flag_t = 0
         self.epd.clear(0xFF)
         time.sleep(0.2)
@@ -82,6 +87,7 @@ class MainApp:
         self.t.join()
         self.epd.dev_exit()
 
+        self.__controller_cleanup()
         if restart:
             os.system("sudo shutdown -r now")
         else:
@@ -91,27 +97,44 @@ class MainApp:
         self.runner.run_pending()
         time.sleep(0.1)
 
-    def __refresh(self):
-        self.__update_screen()
+    def __refresh(self, path: str):
+        self.__update_screen(path)
         self.epd.clear(0xFF)
         self.epd.clear(0xFF)
         time.sleep(2)
-        self.__update_screen()
+        self.__update_screen(self.controller.current_display())
 
-    def __update_screen(self):
-        display = self.controller.current_display()
-        print("Changing to:", display)
-        new_image = Image.open(display)
+    def __update_screen(self, path: str):
+        print("Changing to:", path)
+        new_image = Image.open(path)
         self.epd.display_partial_wait(self.epd.get_buffer(new_image))
+
+    def __update_screen_from_pending(self, result: Result):
+        match result.result:
+            case Results.SUCCESS.value:
+                self.__update_screen(result.display_path)
+            case Results.REFRESH.value:
+                print("refreshing....")
+                self.__refresh(result.display_path)
+            case Results.SHUTDOWN.value:
+                print("Shutting down...")
+                self.__update_screen(result.display_path)
+                time.sleep(2)
+                self.__system_action()
+            case Results.RESTART.value:
+                print("Restarting...")
+                self.__update_screen(result.display_path)
+                time.sleep(2)
+                self.__system_action(True)
+            case _:
+                pass
 
     def run(self):
         try:
             while True:
                 pending_update = self.controller.pending_update()
-                if pending_update != "":
-                    print("update:", pending_update)
-                    new_image = Image.open(pending_update)
-                    self.epd.display_partial_wait(self.epd.get_buffer(new_image))
+                if pending_update != None:
+                    self.__update_screen_from_pending(pending_update)
                     self.__run_end()
                     continue
 
@@ -130,24 +153,9 @@ class MainApp:
                         250 - self.gt_dev.Y[0], self.gt_dev.X[0], self.gt_dev.S[0]
                     )
 
-                    match result:
-                        case Results.SUCCESS.value:
-                            self.__update_screen()
-                        case Results.REFRESH.value:
-                            print("refreshing....")
-                            self.__refresh()
-                        case Results.SHUTDOWN.value:
-                            print("Shutting down...")
-                            self.__update_screen()
-                            time.sleep(2)
-                            self.__system_action()
-                        case Results.RESTART.value:
-                            print("Restarting...")
-                            self.__update_screen()
-                            time.sleep(2)
-                            self.__system_action(True)
-                        case _:
-                            pass
+                    if result is not None:
+                        if result.display_path != "":
+                            self.__update_screen(self.controller.current_display())
 
                 self.__run_end()
         except IOError as e:

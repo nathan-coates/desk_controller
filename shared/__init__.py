@@ -4,6 +4,7 @@ from .app import (
     DeskControllerAppButton,
     DeskControllerAppButtons,
     Result,
+    ResultId,
     Results,
 )
 from .coordinates import HitBox, TouchCoordinates
@@ -13,8 +14,8 @@ from .ui import get_image_path, get_images_dir
 __all__ = [
     "Result",
     "Results",
-    "DeskControllerApp",
-    "DeskControllerAppButton",
+    "ResultId",
+    "DeskControllerAppDeskControllerAppButton",
     "DeskControllerAppButtons",
     "AppJob",
     "TouchCoordinates",

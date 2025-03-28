@@ -1,5 +1,6 @@
 from enum import Enum
-from threading import Timer
+from queue import Queue
+from threading import Thread, Timer
 from typing import Callable, Optional
 
 from shared import (
@@ -9,6 +10,7 @@ from shared import (
     DeskControllerAppButtons,
     HitBox,
     Result,
+    ResultId,
     Results,
     TouchCoordinates,
 )
@@ -25,11 +27,17 @@ class MenuId(int, Enum):
 
 class MenuApp(DeskControllerApp):
     current_id: MenuId
+    job_queue: Queue
+    worker_thread: Thread
 
     def __init__(self):
         self.current_id = MenuId.base
 
-        self.pending_update_display = ""
+        self.pending_update_display = None
+
+        self.job_queue = Queue()
+        self.worker_thread = Thread(target=self.__worker, args=(self.job_queue,))
+        self.worker_thread.start()
 
         self.app_buttons = DeskControllerAppButtons(
             [
@@ -71,30 +79,38 @@ class MenuApp(DeskControllerApp):
 
             match menu_id:
                 case MenuId.refresh:
-                    print("refreshing...")
-                    return Result(Results.REFRESH.value)
+                    return Result(
+                        result=ResultId(Results.REFRESH.value),
+                        display_path=self.display(),
+                    )
                 case MenuId.shutdown:
-                    print("shutting down...")
-                    return Result(Results.SHUTDOWN.value)
+                    return Result(
+                        result=ResultId(Results.SHUTDOWN.value),
+                        display_path=self.display(),
+                    )
                 case MenuId.restart:
-                    print("restarting...")
-                    return Result(Results.RESTART.value)
+                    return Result(
+                        result=ResultId(Results.RESTART.value),
+                        display_path=self.display(),
+                    )
                 case _:
-                    print("unknown menu id")
-                    return Result(Results.NORESPONSE.value)
+                    return Result(
+                        result=ResultId(Results.NORESPONSE.value),
+                        display_path=self.display(),
+                    )
 
         return action
 
-    def touch_event(self, coordinates: TouchCoordinates) -> Result:
+    def touch_event(self, coordinates: TouchCoordinates) -> None:
         for app_button in self.app_buttons:
             if coordinates.check_hit(app_button.hit_box):
-                return app_button.action()
-
-        return Result(Results.NORESPONSE.value)
+                self.job_queue.put(app_button.action)
 
     def __return_to_base(self):
         self.current_id = MenuId.base
-        self.pending_update_display = ImagesMapping.menu_base
+        self.pending_update_display = Result(
+            result=ResultId(Results.SUCCESS.value), display_path=ImagesMapping.menu_base
+        )
 
     def display(self) -> str:
         match self.current_id:
@@ -113,11 +129,33 @@ class MenuApp(DeskControllerApp):
     def error(self) -> str:
         return ImagesMapping.menu_base
 
-    def pending_update(self) -> str:
+    def pending_update(self) -> Optional[Result]:
         to_return = self.pending_update_display
-        self.pending_update_display = ""
+        self.pending_update_display = None
 
         return to_return
 
     def periodic_job(self) -> Optional[AppJob]:
         return None
+
+    def clean_up(self) -> None:
+        self.job_queue.put(None)
+        self.worker_thread.join()
+
+        print("Menu cleaned up")
+
+    def __worker(self, job_queue: Queue) -> None:
+        while True:
+            job: Optional[Callable[[], Result]] = job_queue.get(block=True)
+            if job is None:
+                print("Menu worker closing")
+                break
+
+            try:
+                self.pending_update_display = job()
+            except:
+                self.pending_update_display = Result(
+                    result=ResultId(Results.NORESPONSE.value), display_path=self.error()
+                )
+
+            job_queue.task_done()

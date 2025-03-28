@@ -29,10 +29,7 @@ class Client:
         }
 
     def send_command(self, command: str) -> None:
-        try:
-            port = serial.Serial(self.usb_address, **self.serial_mode)
-            port.write((command + "\n").encode())
-            time.sleep(0.5)
-            port.close()
-        except serial.SerialException as e:
-            print(str(e))
+        port = serial.Serial(self.usb_address, **self.serial_mode)
+        port.write((command + "\n").encode())
+        time.sleep(0.5)
+        port.close()
