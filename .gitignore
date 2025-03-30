@@ -5,3 +5,4 @@ uv.lock
 .python-version
 /.cache
 */__pycache__/*.pyc
+/v2/images
