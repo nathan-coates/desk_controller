@@ -25,12 +25,12 @@ const (
 )
 
 type MenuApp struct {
-	buttons              []*shared.AppButton
 	pendingUpdateDisplay *shared.Result
+	hooks                map[HookId]func()
+	buttons              []*shared.AppButton
 	currentId            mId
 	previousId           mId
 	locked               bool
-	hooks                map[HookId]func()
 }
 
 func New() shared.App {

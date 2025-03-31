@@ -1,6 +1,8 @@
 package shared
 
-import "sync"
+import (
+	"sync"
+)
 
 var Pool = sync.Pool{
 	New: func() interface{} {

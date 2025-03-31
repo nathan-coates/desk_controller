@@ -36,16 +36,18 @@ const (
 )
 
 type KvmApp struct {
-	buttons              []*shared.AppButton
+	client               *Client
 	pendingUpdateDisplay *shared.Result
+	hooks                map[HookId]func()
+	buttons              []*shared.AppButton
 	currentId            cId
 	previousId           cId
 	locked               bool
-	hooks                map[HookId]func()
 }
 
 func New() shared.App {
 	app := &KvmApp{
+		client: NewClient(),
 		buttons: []*shared.AppButton{
 			{ // Mac Mini
 				HitBox: shared.HitBox{
@@ -96,43 +98,32 @@ func (k *KvmApp) actionClosure(computerId cId) func() {
 			k.locked = false
 		}()
 
-		var err error
+		log.Println("Switching to " + computerId.String())
+
+		var hook HookId
+		var command string
 
 		switch computerId {
 		case macMini:
-			if k.previousId != macMini {
-				log.Println("Switching to Mac Mini")
-
-				fn, ok := k.hooks[MacMini]
-				if ok {
-					fn()
-				}
-			}
-			err = nil
+			hook = MacMini
+			command = "COMMAND_1"
 		case workMac:
-			if k.previousId != workMac {
-				log.Println("Switching to Work Mac")
-
-				fn, ok := k.hooks[WorkMac]
-				if ok {
-					fn()
-				}
-			}
-			err = nil
+			hook = WorkMac
+			command = "COMMAND_2"
 		case desktop:
-			if k.previousId != desktop {
-				log.Println("Switching to Desktop")
-
-				fn, ok := k.hooks[Desktop]
-				if ok {
-					fn()
-				}
-			}
-			err = nil
+			hook = Desktop
+			command = "COMMAND_3"
 		}
 
+		if k.previousId != computerId {
+			fn, ok := k.hooks[hook]
+			if ok {
+				fn()
+			}
+		}
+
+		err := k.client.SendCommand(command)
 		if err != nil {
-			log.Println(err)
 			k.currentId = k.previousId
 
 			result := shared.Pool.

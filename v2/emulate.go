@@ -5,9 +5,10 @@ package main
 import (
 	"fmt"
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/joho/godotenv"
 	"github.com/nathan-coates/desk_controller/v2/controller"
 	"github.com/nathan-coates/desk_controller/v2/kvm"
+	"github.com/nathan-coates/desk_controller/v2/lights"
 	"github.com/nathan-coates/desk_controller/v2/menu"
 	"github.com/nathan-coates/desk_controller/v2/shared"
 	"image"
@@ -122,10 +123,11 @@ type Game struct {
 
 func NewGame() *Game {
 	k := kvm.New()
+	l := lights.New()
 	m := menu.New()
 
 	g := &Game{
-		app: controller.New(k, m),
+		app: controller.New(k, l, m),
 		x:   -1,
 		y:   -1,
 	}
@@ -169,13 +171,7 @@ func (g *Game) Update() error {
 
 	pendingUpdate := g.app.PendingUpdate()
 	if pendingUpdate != nil {
-		currentDisplay, _, err := ebitenutil.NewImageFromFile(pendingUpdate.Display)
-		if err != nil {
-			return err
-		}
-
-		g.currentDisplay = currentDisplay
-
+		g.currentDisplay = ebiten.NewImageFromImage(imageMapping[pendingUpdate.Display])
 		shared.Pool.Put(pendingUpdate)
 	}
 
@@ -195,6 +191,11 @@ func (g *Game) Cleanup() {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	ebiten.SetWindowSize(250, 122)
 	ebiten.SetWindowTitle("Tester")
 	game := NewGame()
@@ -212,14 +213,14 @@ func main() {
 		os.Exit(0)
 	}()
 
-	err := ebiten.RunGame(game)
-	if err != nil {
-		err = cleanup()
+	rErr := ebiten.RunGame(game)
+	if rErr != nil {
+		err := cleanup()
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		game.Cleanup()
-		log.Fatal(err)
+		log.Fatal(rErr)
 	}
 }

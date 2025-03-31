@@ -13,8 +13,8 @@ const (
 )
 
 type Result struct {
-	Result  ResultId
 	Display string
+	Result  ResultId
 }
 
 func (r *Result) Set(result ResultId, display string) *Result {
@@ -24,11 +24,10 @@ func (r *Result) Set(result ResultId, display string) *Result {
 }
 
 type AppButton struct {
-	HitBox HitBox
-
 	Action func()
 
 	ImmediateAction func()
+	HitBox          HitBox
 }
 
 type App interface {
