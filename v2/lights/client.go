@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -51,7 +50,7 @@ func NewClient() *Client {
 		},
 		Lights: make([]light, 3),
 		httpClient: &http.Client{
-			Timeout: time.Second * 3,
+			Timeout: time.Second * 5,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
@@ -162,14 +161,8 @@ func (c *Client) GetGroupedLightsState() bool {
 
 			defer res.Body.Close()
 
-			respBody, err := io.ReadAll(res.Body)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
 			var data HueResponse
-			err = json.Unmarshal(respBody, &data)
+			err = json.NewDecoder(res.Body).Decode(&data)
 			if err != nil {
 				log.Println(err)
 				return

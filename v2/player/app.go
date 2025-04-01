@@ -2,6 +2,7 @@ package player
 
 import (
 	"github.com/nathan-coates/desk_controller/v2/shared"
+	"log"
 	"time"
 )
 
@@ -33,6 +34,13 @@ const (
 	Next
 	Back
 )
+
+func boolToPid(state bool) pId {
+	if state {
+		return playing
+	}
+	return paused
+}
 
 type PlayerApp struct {
 	client               *Client
@@ -87,6 +95,8 @@ func New() shared.App {
 
 	app.buttons[2].Action = app.actionClosure(next)
 	app.buttons[2].ImmediateAction = app.immediateActionClosure(next)
+
+	app.currentId = boolToPid(app.client.Playing)
 
 	return app
 }
@@ -229,10 +239,18 @@ func (p *PlayerApp) PendingUpdate() *shared.Result {
 }
 
 func (p *PlayerApp) PeriodicJob() (func(), time.Duration) {
-	return nil, time.Duration(0)
+	return func() {
+		state, err := p.client.GetPlaybackState()
+		if err != nil {
+			log.Println(err)
+		}
+
+		p.currentId = boolToPid(state)
+	}, 30 * time.Second
 }
 
 func (p *PlayerApp) Cleanup() {
+	p.client.Pause()
 }
 
 func (p *PlayerApp) RegisterHook(id int, hook func()) {
