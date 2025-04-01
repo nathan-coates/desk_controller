@@ -10,6 +10,7 @@ import (
 	"github.com/nathan-coates/desk_controller/v2/kvm"
 	"github.com/nathan-coates/desk_controller/v2/lights"
 	"github.com/nathan-coates/desk_controller/v2/menu"
+	"github.com/nathan-coates/desk_controller/v2/player"
 	"github.com/nathan-coates/desk_controller/v2/shared"
 	"image"
 	"image/png"
@@ -123,11 +124,12 @@ type Game struct {
 
 func NewGame() *Game {
 	k := kvm.New()
+	p := player.New()
 	l := lights.New()
 	m := menu.New()
 
 	g := &Game{
-		app: controller.New(k, l, m),
+		app: controller.New(k, p, l, m),
 		x:   -1,
 		y:   -1,
 	}

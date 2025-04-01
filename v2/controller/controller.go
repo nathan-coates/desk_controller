@@ -26,7 +26,7 @@ type Controller struct {
 	errorState bool
 }
 
-func New(kvmApp, lightsApp, menuApp shared.App) *Controller {
+func New(kvmApp, playerApp, lightsApp, menuApp shared.App) *Controller {
 	c := &Controller{
 		apps: []*App{
 			{
@@ -35,6 +35,10 @@ func New(kvmApp, lightsApp, menuApp shared.App) *Controller {
 			},
 			{
 				app:  kvmApp,
+				menu: true,
+			},
+			{
+				app:  playerApp,
 				menu: true,
 			},
 			{
@@ -83,8 +87,10 @@ func New(kvmApp, lightsApp, menuApp shared.App) *Controller {
 
 	c.currentApp = c.apps[1]
 
-	c.apps[1].right = c.apps[2]
-	c.apps[2].left = c.apps[1]
+	c.apps[1].right = c.apps[2] // linking kvm to player
+	c.apps[2].left = c.apps[1]  //linking player to kvm
+	c.apps[2].right = c.apps[3] //linking player to lights
+	c.apps[3].left = c.apps[2]  //linking lights to player
 
 	for _, app := range c.apps {
 		job, duration := app.app.PeriodicJob()
