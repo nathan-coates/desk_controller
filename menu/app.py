@@ -1,6 +1,7 @@
 from enum import Enum
 from queue import Queue
 from threading import Thread, Timer
+from time import sleep
 from typing import Callable, Optional
 
 from shared import (
@@ -29,9 +30,11 @@ class MenuApp(DeskControllerApp):
     current_id: MenuId
     job_queue: Queue
     worker_thread: Thread
+    hooks: dict[MenuId, Callable[[], None]]
 
     def __init__(self):
         self.current_id = MenuId.base
+        self.hooks = {}
 
         self.pending_update_display = None
 
@@ -73,33 +76,34 @@ class MenuApp(DeskControllerApp):
 
         print("MenuApp READY")
 
-    def __action_closure(self, menu_id: MenuId) -> Callable[[], Result]:
-        def action() -> Result:
+    def __immediate_action_closure(self, menu_id: MenuId) -> Callable[[], None]:
+        def action() -> None:
             self.current_id = menu_id
 
-            match menu_id:
-                case MenuId.refresh:
-                    return Result(
-                        result=ResultId(Results.REFRESH.value),
-                        display_path=self.display(),
+        return action
+
+    def __action_closure(self, menu_id: MenuId) -> [Callable[[], Optional[Result]]]:
+        def action() -> Optional[Result]:
+            sleep(3)
+            try:
+                self.hooks[menu_id]()
+                if menu_id == MenuId.refresh:
+                    self.current_id = MenuId.base
+
+                    self.pending_update_display = Result(
+                        result=ResultId(Results.SUCCESS.value),
+                        display_path=self.display()
                     )
-                case MenuId.shutdown:
-                    return Result(
-                        result=ResultId(Results.SHUTDOWN.value),
-                        display_path=self.display(),
-                    )
-                case MenuId.restart:
-                    return Result(
-                        result=ResultId(Results.RESTART.value),
-                        display_path=self.display(),
-                    )
-                case _:
-                    return Result(
-                        result=ResultId(Results.NORESPONSE.value),
-                        display_path=self.display(),
-                    )
+            except:
+                return Result(
+                    result=ResultId(Results.NORESPONSE.value),
+                    display_path=self.error(),
+                )
+
+            return None
 
         return action
+
 
     def touch_event(self, coordinates: TouchCoordinates) -> None:
         for app_button in self.app_buttons:
@@ -159,3 +163,7 @@ class MenuApp(DeskControllerApp):
                 )
 
             job_queue.task_done()
+
+    def register_hook(self, id: MenuId, hook: Callable[[], None]) -> None:
+        self.hooks[id] = hook
+
